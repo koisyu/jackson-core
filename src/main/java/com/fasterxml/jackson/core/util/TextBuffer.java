@@ -101,6 +101,11 @@ public class TextBuffer
      */
     private int _currentSize;
 
+    /**
+     * Buffer allocated from BufferRecycler
+     */
+    private char[] _bufferFromBufferRecycler;
+
     /*
     /**********************************************************
     /* Caching of results
@@ -177,13 +182,16 @@ public class TextBuffer
             }
         }
 
-        if (_allocator != null) {
-            if (_currentSegment != null) {
-                // And then return that array
-                char[] buf = _currentSegment;
-                _currentSegment = null;
-                _allocator.releaseCharBuffer(BufferRecycler.CHAR_TEXT_BUFFER, buf);
+        if (_allocator != null && _currentSegment != null) {
+            // And then return that array
+            char[] buf = _currentSegment;
+            if (_bufferFromBufferRecycler != null && buf.length <= _bufferFromBufferRecycler.length) {
+                // If the size of the buffer allocated from BufferRecycler is already large, the existing one is recycled.
+                buf = _bufferFromBufferRecycler;
             }
+            _currentSegment = null;
+            _bufferFromBufferRecycler = null;
+            _allocator.releaseCharBuffer(BufferRecycler.CHAR_TEXT_BUFFER, buf);
         }
     }
 

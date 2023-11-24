@@ -48,6 +48,11 @@ public final class ByteArrayBuilder extends OutputStream
     private byte[] _currBlock;
     private int _currBlockPtr;
 
+    /**
+     * Buffer allocated from BufferRecycler
+     */
+    private byte[] _bufferFromBufferRecycler;
+
     public ByteArrayBuilder() { this(null); }
     public ByteArrayBuilder(BufferRecycler br) { this(br, INITIAL_BLOCK_SIZE); }
     public ByteArrayBuilder(int firstBlockSize) { this(null, firstBlockSize); }
@@ -59,7 +64,12 @@ public final class ByteArrayBuilder extends OutputStream
         if (firstBlockSize > MAX_BLOCK_SIZE) {
             firstBlockSize = MAX_BLOCK_SIZE;
         }
-        _currBlock = (br == null) ? new byte[firstBlockSize] : br.allocByteBuffer(BufferRecycler.BYTE_WRITE_CONCAT_BUFFER);
+        if (br == null) {
+            _currBlock = new byte[firstBlockSize];
+        } else {
+            _currBlock = br.allocByteBuffer(BufferRecycler.BYTE_WRITE_CONCAT_BUFFER);
+            _bufferFromBufferRecycler = _currBlock;
+        }
     }
 
     private ByteArrayBuilder(BufferRecycler br, byte[] initialBlock, int initialLen) {
@@ -97,9 +107,15 @@ public final class ByteArrayBuilder extends OutputStream
      */
     public void release() {
         reset();
-        if (_bufferRecycler != null && _currBlock != null) {
-            _bufferRecycler.releaseByteBuffer(BufferRecycler.BYTE_WRITE_CONCAT_BUFFER, _currBlock);
+        if (_bufferRecycler != null && _currBlock != null && _bufferFromBufferRecycler != null) {
+            byte[] bufferToRelease = _currBlock;
+            if (bufferToRelease != _bufferFromBufferRecycler && bufferToRelease.length <= _bufferFromBufferRecycler.length) {
+                // If the size of the buffer allocated from BufferRecycler is already large, the existing one is recycled.
+                bufferToRelease = _bufferFromBufferRecycler;
+            }
+            _bufferRecycler.releaseByteBuffer(BufferRecycler.BYTE_WRITE_CONCAT_BUFFER, bufferToRelease);
             _currBlock = null;
+            _bufferFromBufferRecycler = null;
         }
     }
 
